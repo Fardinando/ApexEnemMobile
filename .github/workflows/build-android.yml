@@ -27,7 +27,7 @@ jobs:
       - name: Initialize EAS project
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas init --non-interactive
+        run: eas init --non-interactive --force
 
       - name: Build APK
         env:
