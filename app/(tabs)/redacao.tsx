@@ -12,8 +12,9 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, getColors, Spacing, FontSize, BorderRadius } from '../../lib/theme';
+import { getColors, Spacing, FontSize, BorderRadius } from '../../lib/theme';
 import { submitEssay, pollCura } from '../../lib/api';
 import { saveEssay } from '../../lib/supabase';
 import { supabase } from '../../lib/supabase';
@@ -137,74 +138,56 @@ export default function RedacaoScreen() {
     } catch {}
   }
 
-  function renderScoreCircle() {
+  function renderScoreCard() {
     const score = result?.score || 0;
-    const getColor = () => {
-      if (score >= 800) return colors.success;
-      if (score >= 600) return colors.primary;
-      if (score >= 400) return colors.warning;
-      return colors.danger;
-    };
-
-    return (
-      <View style={[styles.scoreContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={[styles.scoreCircle, { borderColor: getColor(), borderWidth: 4 }]}>
-          <Text style={[styles.scoreNumber, { color: getColor() }]}>{score}</Text>
-          <Text style={[styles.scoreMax, { color: colors.textSecondary }]}>/1000</Text>
-        </View>
-        <Text style={[styles.scoreLabel, { color: colors.textSecondary }]}>Nota Geral</Text>
-      </View>
-    );
-  }
-
-  function renderCompetencies() {
     const competencies = result?.competencies || [];
-    if (competencies.length === 0) return null;
 
     return (
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="bar-chart" size={20} color={colors.primary} />
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Competências</Text>
-        </View>
-        {competencies.map((comp: any, i: number) => {
-          const label = comp.name || comp.nome || COMPETENCY_LABELS[`C${i + 1}`] || `Competência ${i + 1}`;
-          const score = comp.score || comp.nota || comp.value || 0;
-          const maxScore = comp.max || 200;
-          const pct = Math.min(score / maxScore, 1);
-          const barColor = pct >= 0.8 ? colors.success : pct >= 0.5 ? colors.warning : colors.danger;
+        <LinearGradient
+          colors={[colors.scoreHeaderFrom, colors.scoreHeaderVia, colors.scoreHeaderTo]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.scoreGradient}
+        >
+          <Text style={styles.scoreNumberLarge}>{score}</Text>
+          <Text style={styles.scoreMaxLabel}>/1000</Text>
+        </LinearGradient>
 
-          return (
-            <View key={i} style={styles.competencyItem}>
-              <View style={styles.competencyHeader}>
-                <Text style={[styles.competencyName, { color: colors.text }]}>{label}</Text>
-                <Text style={[styles.competencyScore, { color: barColor }]}>{score}/{maxScore}</Text>
-              </View>
-              <View style={[styles.progressBar, { backgroundColor: colors.surfaceAlt }]}>
-                <View style={[styles.progressFill, { width: `${pct * 100}%`, backgroundColor: barColor }]} />
-              </View>
-              {comp.feedback && (
-                <Text style={[styles.competencyFeedback, { color: colors.textSecondary }]}>{comp.feedback}</Text>
-              )}
-            </View>
-          );
-        })}
+        {competencies.length > 0 && (
+          <View style={styles.competenciesGrid}>
+            {competencies.map((comp: any, i: number) => {
+              const label = comp.name || comp.nome || COMPETENCY_LABELS[`C${i + 1}`] || `Competência ${i + 1}`;
+              const compScore = comp.score || comp.nota || comp.value || 0;
+              const maxScore = comp.max || 200;
+              const pct = Math.min(compScore / maxScore, 1);
+              const barColor = pct >= 0.8 ? colors.success : pct >= 0.5 ? colors.warning : colors.danger;
+
+              return (
+                <View key={i} style={styles.competencyItem}>
+                  <Text style={[styles.competencyName, { color: colors.text }]}>{label}</Text>
+                  <Text style={[styles.competencyScore, { color: barColor }]}>{compScore}/{maxScore}</Text>
+                  <View style={[styles.progressBar, { backgroundColor: colors.surfaceLow }]}>
+                    <View style={[styles.progressFill, { width: `${pct * 100}%`, backgroundColor: barColor }]} />
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </View>
     );
   }
 
-  function renderList(title: string, items: string[], icon: string, iconColor: string) {
+  function renderBulletList(title: string, items: string[], color: string) {
     if (!items || items.length === 0) return null;
 
     return (
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.cardHeader}>
-          <Ionicons name={icon as any} size={20} color={iconColor} />
-          <Text style={[styles.cardTitle, { color: colors.text }]}>{title}</Text>
-        </View>
+        <Text style={[styles.listTitle, { color: colors.text }]}>{title}</Text>
         {items.map((item, i) => (
           <View key={i} style={styles.listItem}>
-            <View style={[styles.bullet, { backgroundColor: iconColor }]} />
+            <View style={[styles.bullet, { backgroundColor: color }]} />
             <Text style={[styles.listText, { color: colors.text }]}>{item}</Text>
           </View>
         ))}
@@ -218,10 +201,7 @@ export default function RedacaoScreen() {
 
     return (
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="chatbubble-ellipses" size={20} color={colors.accent} />
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Feedback Geral</Text>
-        </View>
+        <Text style={[styles.listTitle, { color: colors.text }]}>Feedback Geral</Text>
         <Text style={[styles.feedbackText, { color: colors.text }]}>{feedback}</Text>
       </View>
     );
@@ -234,13 +214,16 @@ export default function RedacaoScreen() {
     >
       <View style={[styles.container, { backgroundColor: colors.bg }]}>
         <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <Ionicons name="document-text" size={28} color={colors.primary} />
+          <Ionicons name="pencil" size={24} color={colors.primary} />
           <Text style={[styles.headerTitle, { color: colors.text }]}>Redação</Text>
-          <TouchableOpacity onPress={() => setShowHistory(!showHistory)}>
+          <TouchableOpacity
+            style={[styles.historyToggle, { backgroundColor: showHistory ? colors.primaryLight : colors.input }]}
+            onPress={() => setShowHistory(!showHistory)}
+          >
             <Ionicons
-              name={showHistory ? 'create' : 'time'}
-              size={24}
-              color={colors.primary}
+              name={showHistory ? 'create-outline' : 'time-outline'}
+              size={20}
+              color={showHistory ? colors.primary : colors.textSecondary}
             />
           </TouchableOpacity>
         </View>
@@ -255,79 +238,76 @@ export default function RedacaoScreen() {
             <>
               <Text style={[styles.sectionTitle, { color: colors.text }]}>Histórico</Text>
               {history.length === 0 ? (
-                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', paddingVertical: 40 }]}>
+                  <Ionicons name="document-text-outline" size={48} color={colors.textTertiary} />
                   <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhuma redação corrigida ainda.</Text>
                 </View>
               ) : (
-                history.map((essay) => (
-                  <TouchableOpacity
-                    key={essay.id}
-                    style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                    onPress={() => {
-                      setTitle(essay.title || '');
-                      setEssayText(essay.text || '');
-                      setResult({
-                        score: essay.score,
-                        competencies: essay.competencies || [],
-                        strengths: essay.strengths || [],
-                        weaknesses: essay.weaknesses || [],
-                        generalFeedback: essay.general_feedback || '',
-                      });
-                      setShowHistory(false);
-                    }}
-                  >
-                    <View style={styles.historyItem}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.historyTitle, { color: colors.text }]}>{essay.title}</Text>
-                        <Text style={[styles.historyDate, { color: colors.textSecondary }]}>
-                          {new Date(essay.date || essay.created_at).toLocaleDateString('pt-BR')}
-                        </Text>
+                history.map((essay) => {
+                  const essayScore = essay.score || 0;
+                  const isHigh = essayScore >= 600;
+                  return (
+                    <TouchableOpacity
+                      key={essay.id}
+                      style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                      onPress={() => {
+                        setTitle(essay.title || '');
+                        setEssayText(essay.text || '');
+                        setResult({
+                          score: essay.score,
+                          competencies: essay.competencies || [],
+                          strengths: essay.strengths || [],
+                          weaknesses: essay.weaknesses || [],
+                          generalFeedback: essay.general_feedback || '',
+                        });
+                        setShowHistory(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.historyItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{essay.title}</Text>
+                          <Text style={[styles.historyDate, { color: colors.textSecondary }]}>
+                            {new Date(essay.date || essay.created_at).toLocaleDateString('pt-BR')}
+                          </Text>
+                        </View>
+                        <View style={[styles.historyScoreBadge, { backgroundColor: isHigh ? colors.successLight : colors.dangerLight }]}>
+                          <Text style={[styles.historyScoreText, { color: isHigh ? colors.success : colors.danger }]}>
+                            {essayScore}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={[styles.historyScore, { backgroundColor: essay.score >= 600 ? colors.successLight : colors.dangerLight }]}>
-                        <Text style={[styles.historyScoreText, { color: essay.score >= 600 ? colors.success : colors.danger }]}>
-                          {essay.score}
-                        </Text>
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                ))
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </>
           ) : (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Nova Correção</Text>
-
               <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.cardHeader}>
-                  <Ionicons name="create" size={20} color={colors.primary} />
-                  <Text style={[styles.cardTitle, { color: colors.text }]}>Título da Redação</Text>
-                </View>
+                <Text style={[styles.inputLabel, { color: colors.text }]}>Título da Redação</Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: colors.input, color: colors.text, borderColor: colors.border }]}
                   placeholder="Ex: Desafios para a educação no Brasil"
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={colors.textTertiary}
                   value={title}
                   onChangeText={setTitle}
                   maxLength={200}
                 />
-              </View>
 
-              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                <View style={styles.cardHeader}>
-                  <Ionicons name="document" size={20} color={colors.primary} />
-                  <Text style={[styles.cardTitle, { color: colors.text }]}>Texto da Redação</Text>
-                </View>
+                <Text style={[styles.inputLabel, { color: colors.text, marginTop: 20 }]}>Texto da Redação</Text>
                 <TextInput
                   style={[styles.textArea, { backgroundColor: colors.input, color: colors.text, borderColor: colors.border }]}
                   placeholder="Escreva sua redação aqui (mínimo 80 caracteres)..."
-                  placeholderTextColor={colors.textSecondary}
+                  placeholderTextColor={colors.textTertiary}
                   value={essayText}
                   onChangeText={setEssayText}
                   multiline
                   textAlignVertical="top"
                   numberOfLines={10}
-                  maxLength={30000}
+                  maxLength={10000}
                 />
+
                 <View style={styles.charCounter}>
                   <Text
                     style={[
@@ -341,36 +321,35 @@ export default function RedacaoScreen() {
                     {charCount}/10000
                   </Text>
                 </View>
-              </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.submitButton,
-                  { backgroundColor: isValid ? colors.primary : colors.surfaceAlt },
-                  loading && { opacity: 0.7 },
-                ]}
-                onPress={handleSubmit}
-                disabled={loading || !isValid}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="checkmark-circle" size={20} color={isValid ? '#fff' : colors.textSecondary} />
-                    <Text style={[styles.submitText, { color: isValid ? '#fff' : colors.textSecondary }]}>
-                      Corrigir Redação
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.submitButton,
+                    { backgroundColor: isValid ? colors.primary : colors.surfaceDim },
+                    loading && { opacity: 0.7 },
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={loading || !isValid}
+                  activeOpacity={0.8}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle" size={20} color={isValid ? '#fff' : colors.textSecondary} />
+                      <Text style={[styles.submitText, { color: isValid ? '#fff' : colors.textSecondary }]}>
+                        Corrigir Redação
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
 
               {result && (
                 <>
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>Resultado</Text>
-                  {renderScoreCircle()}
-                  {renderCompetencies()}
-                  {renderList('Pontos Fortes', result.strengths || [], 'thumbs-up', colors.success)}
-                  {renderList('Pontos a Melhorar', result.weaknesses || [], 'alert-circle', colors.warning)}
+                  {renderScoreCard()}
+                  {renderBulletList('Pontos Fortes', result.strengths || [], colors.success)}
+                  {renderBulletList('Pontos a Melhorar', result.weaknesses || [], colors.warning)}
                   {renderFeedback()}
                 </>
               )}
@@ -387,43 +366,53 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: 20,
     paddingTop: 56,
-    paddingBottom: Spacing.lg,
+    paddingBottom: 16,
     borderBottomWidth: 1,
-    gap: Spacing.sm,
+    gap: 10,
   },
-  headerTitle: { fontSize: FontSize.xl, fontWeight: '700', flex: 1 },
+  headerTitle: { fontSize: 24, fontWeight: '700', flex: 1 },
+  historyToggle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scroll: { flex: 1 },
-  scrollContent: { padding: Spacing.lg, paddingBottom: 100 },
+  scrollContent: { padding: 20, paddingBottom: 100 },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: '700', marginBottom: Spacing.md },
   card: {
-    borderRadius: BorderRadius.md,
+    borderRadius: 24,
     borderWidth: 1,
-    padding: Spacing.lg,
-    marginBottom: Spacing.md,
+    padding: 24,
+    marginBottom: 16,
   },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
-  cardTitle: { fontSize: FontSize.md, fontWeight: '600' },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
   input: {
-    borderRadius: BorderRadius.sm,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: FontSize.md,
   },
   textArea: {
-    borderRadius: BorderRadius.sm,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: FontSize.md,
     minHeight: 200,
   },
   charCounter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: Spacing.sm,
+    marginTop: 10,
   },
   charText: { fontSize: FontSize.xs },
   submitButton: {
@@ -431,54 +420,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.xl,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 16,
   },
   submitText: { fontSize: FontSize.md, fontWeight: '600' },
-  scoreContainer: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    padding: Spacing.xl,
+  scoreGradient: {
+    borderRadius: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 20,
   },
-  scoreCircle: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.sm,
+  scoreNumberLarge: {
+    fontSize: 56,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 62,
   },
-  scoreNumber: { fontSize: FontSize.xxxl, fontWeight: '800' },
-  scoreMax: { fontSize: FontSize.sm },
-  scoreLabel: { fontSize: FontSize.sm, fontWeight: '500' },
-  competencyItem: { marginBottom: Spacing.md },
-  competencyHeader: {
+  scoreMaxLabel: {
+    fontSize: FontSize.lg,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  competenciesGrid: {
+    gap: 16,
+  },
+  competencyItem: {
+    gap: 6,
+  },
+  competencyName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  competencyScore: {
+    fontSize: 12,
+    fontWeight: '700',
+    alignSelf: 'flex-end',
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  listTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  listItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 8,
   },
-  competencyName: { fontSize: FontSize.sm, fontWeight: '600', flex: 1 },
-  competencyScore: { fontSize: FontSize.sm, fontWeight: '700' },
-  competencyFeedback: { fontSize: FontSize.xs, marginTop: Spacing.xs, lineHeight: 18 },
-  progressBar: { height: 8, borderRadius: 4, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 4 },
-  listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm, marginBottom: Spacing.sm },
-  bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 6 },
+  bullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 6,
+  },
   listText: { fontSize: FontSize.sm, flex: 1, lineHeight: 20 },
   feedbackText: { fontSize: FontSize.sm, lineHeight: 22 },
-  historyItem: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  historyTitle: { fontSize: FontSize.md, fontWeight: '600' },
-  historyDate: { fontSize: FontSize.xs, marginTop: 2 },
-  historyScore: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: BorderRadius.full,
-    minWidth: 50,
+  historyItem: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  historyTitle: { fontSize: 14, fontWeight: '700' },
+  historyDate: { fontSize: 10, marginTop: 2 },
+  historyScoreBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    minWidth: 56,
     alignItems: 'center',
   },
   historyScoreText: { fontSize: FontSize.sm, fontWeight: '700' },
-  emptyText: { fontSize: FontSize.md, textAlign: 'center', paddingVertical: Spacing.xl },
+  emptyText: { fontSize: FontSize.md, textAlign: 'center', marginTop: 12 },
 });

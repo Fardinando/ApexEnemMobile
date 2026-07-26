@@ -15,33 +15,29 @@ import {
   getLevelFromXp,
   getLevelTitle,
   computeGamificationStats,
+  getAllAchievements,
+  GamificationStats,
 } from '../../lib/gamification';
-import { Colors, Spacing, FontSize, BorderRadius } from '../../lib/theme';
-
-interface StatCard {
-  label: string;
-  value: string;
-  icon: string;
-  color: string;
-}
+import { getColors, ThemeColors, BorderRadius, Spacing, FontSize } from '../../lib/theme';
 
 interface RecentActivity {
   id: string;
-  type: string;
+  type: 'essay' | 'simulado' | 'streak';
   title: string;
   date: string;
 }
 
 export default function DashboardScreen() {
   const colorScheme = useColorScheme();
-  const colors = colorScheme === 'dark' ? Colors.dark : Colors.light;
+  const colors = getColors(colorScheme);
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('Estudante');
-  const [stats, setStats] = useState<StatCard[]>([]);
+  const [gamStats, setGamStats] = useState<GamificationStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [achievements, setAchievements] = useState<{ id: string; title: string; icon: string; unlocked: boolean }[]>([]);
 
   const loadData = useCallback(async () => {
     try {
@@ -56,7 +52,7 @@ export default function DashboardScreen() {
         fetchSimulados(user.id),
       ]);
 
-      const gamStats = computeGamificationStats({
+      const gs = computeGamificationStats({
         essays: essays.map((e: any) => ({ score: e.score || 0 })),
         simulados: simulados.map((s: any) => ({ scorePercent: s.score_percent || s.scorePercent || 0 })),
         streak: profile?.streak || 0,
@@ -65,16 +61,8 @@ export default function DashboardScreen() {
         questionsAnswered: profile?.questionsAnswered || profile?.questions_answered || 0,
       });
 
-      const levelInfo = getLevelFromXp(gamStats.totalXp);
-      const levelTitle = getLevelTitle(levelInfo.level);
-
-      setStats([
-        { label: 'XP Total', value: gamStats.totalXp.toLocaleString('pt-BR'), icon: 'star', color: colors.warning },
-        { label: 'Nível', value: `${levelInfo.level} - ${levelTitle}`, icon: 'trophy', color: colors.primary },
-        { label: 'Streak', value: `${gamStats.currentStreak} dias`, icon: 'flame', color: colors.danger },
-        { label: 'Redações', value: String(gamStats.totalEssays), icon: 'document-text', color: colors.accent },
-        { label: 'Simulados', value: String(gamStats.totalSimulados), icon: 'school', color: colors.success },
-      ]);
+      setGamStats(gs);
+      setAchievements(getAllAchievements(gs));
 
       const activities: RecentActivity[] = [];
 
@@ -96,19 +84,28 @@ export default function DashboardScreen() {
         });
       });
 
+      if ((profile?.streak || 0) > 0) {
+        activities.push({
+          id: 'streak',
+          type: 'streak',
+          title: `Sequência de ${profile.streak} dias`,
+          date: new Date().toISOString(),
+        });
+      }
+
       activities.sort((a, b) => {
         if (!a.date) return 1;
         if (!b.date) return -1;
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
 
-      setRecentActivity(activities.slice(0, 5));
+      setRecentActivity(activities.slice(0, 6));
     } catch {
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [colors]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -139,11 +136,10 @@ export default function DashboardScreen() {
     }
   };
 
-  const quickActions = [
-    { label: 'Corrigir Redação', icon: 'create-outline' as const, screen: '/(tabs)/redacao' },
-    { label: 'Fazer Simulado', icon: 'clipboard-outline' as const, screen: '/(tabs)/simulados' },
-    { label: 'Estudar Agora', icon: 'bulb-outline' as const, screen: '/(tabs)/estudos' },
-  ];
+  const levelInfo = gamStats ? getLevelFromXp(gamStats.totalXp) : null;
+  const xpProgress = levelInfo ? levelInfo.progress / 100 : 0;
+  const totalAchievements = achievements.length;
+  const unlockedAchievements = achievements.filter((a) => a.unlocked).slice(0, 6);
 
   if (loading) {
     return (
@@ -160,7 +156,8 @@ export default function DashboardScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       showsVerticalScrollIndicator={false}
     >
-      <View style={[styles.header, { backgroundColor: colors.surface }]}>
+      {/* Header */}
+      <View style={[styles.header, { backgroundColor: colors.bg }]}>
         <View>
           <Text style={[styles.greeting, { color: colors.textSecondary }]}>Olá,</Text>
           <Text style={[styles.userName, { color: colors.text }]}>{userName}</Text>
@@ -170,69 +167,176 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Seus Progressos</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
-          {stats.map((stat, i) => (
-            <View key={i} style={[styles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={[styles.statIconWrap, { backgroundColor: stat.color + '18' }]}>
-                <Ionicons name={stat.icon as any} size={18} color={stat.color} />
-              </View>
-              <Text style={[styles.statValue, { color: colors.text }]} numberOfLines={1}>{stat.value}</Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]} numberOfLines={1}>{stat.label}</Text>
+      <View style={styles.body}>
+        {/* Streak Card */}
+        <View style={[styles.streakCard]}>
+          <View style={styles.streakRow}>
+            <View style={styles.streakLeft}>
+              <Text style={styles.streakFire}>🔥</Text>
+              <Text style={styles.streakDias}>{gamStats?.currentStreak || 0} dias</Text>
+              <Text style={styles.streakSub}>Sequência atual</Text>
             </View>
-          ))}
-        </ScrollView>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Ações Rápidas</Text>
-        <View style={styles.actionsRow}>
-          {quickActions.map((action, i) => (
-            <TouchableOpacity
-              key={i}
-              style={[styles.actionBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              activeOpacity={0.7}
-              onPress={() => router.push(action.screen)}
-            >
-              <View style={[styles.actionIconWrap, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name={action.icon} size={22} color={colors.primary} />
+            {levelInfo && (
+              <View style={styles.levelBadgeOuter}>
+                <Text style={styles.levelBadgeText}>Nv. {levelInfo.level}</Text>
               </View>
-              <Text style={[styles.actionLabel, { color: colors.text }]} numberOfLines={2}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
+            )}
+          </View>
+          <View style={styles.streakBarBg}>
+            <View style={[styles.streakBarFill, { width: `${Math.max(xpProgress * 100, 2)}%` }]} />
+          </View>
+          <Text style={styles.streakXpLabel}>{gamStats?.totalXp || 0} XP</Text>
+        </View>
+
+        {/* Stats Grid */}
+        <View style={styles.statsGridCard}>
+          <View style={styles.statsGrid}>
+            <StatCell
+              icon="star"
+              value={gamStats?.totalXp.toLocaleString('pt-BR') || '0'}
+              label="XP Total"
+              bg="#dbeafe"
+              fg="#2563EB"
+              darkBg="rgba(59,130,246,0.15)"
+              darkFg="#60a5fa"
+              isDark={colorScheme === 'dark'}
+            />
+            <StatCell
+              icon="document-text"
+              value={String(gamStats?.totalEssays || 0)}
+              label="Redações"
+              bg="#ede9fe"
+              fg="#7c3aed"
+              darkBg="rgba(124,58,237,0.15)"
+              darkFg="#a78bfa"
+              isDark={colorScheme === 'dark'}
+            />
+            <StatCell
+              icon="school"
+              value={String(gamStats?.totalSimulados || 0)}
+              label="Simulados"
+              bg="#d1fae5"
+              fg="#10b981"
+              darkBg="rgba(16,185,129,0.15)"
+              darkFg="#34d399"
+              isDark={colorScheme === 'dark'}
+            />
+            <StatCell
+              icon="help-circle"
+              value={String(gamStats?.totalQuestionsAnswered || 0)}
+              label="Questões"
+              bg="#fef3c7"
+              fg="#f59e0b"
+              darkBg="rgba(245,158,11,0.15)"
+              darkFg="#fbbf24"
+              isDark={colorScheme === 'dark'}
+            />
+          </View>
+        </View>
+
+        {/* Activity Timeline */}
+        <View style={[styles.bentoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Atividade Recente</Text>
+          </View>
+          {recentActivity.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="time-outline" size={28} color={colors.textTertiary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhuma atividade ainda</Text>
+            </View>
+          ) : (
+            <View style={styles.timeline}>
+              {recentActivity.map((activity, i) => {
+                const dotColor =
+                  activity.type === 'essay'
+                    ? '#2563EB'
+                    : activity.type === 'simulado'
+                    ? '#4f46e5'
+                    : '#f59e0b';
+                return (
+                  <View key={activity.id} style={styles.timelineEntry}>
+                    <View style={styles.timelineDotCol}>
+                      <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
+                      {i < recentActivity.length - 1 && (
+                        <View style={[styles.timelineLine, { backgroundColor: colors.border }]} />
+                      )}
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <Text style={[styles.timelineTitle, { color: colors.text }]} numberOfLines={1}>
+                        {activity.title}
+                      </Text>
+                      <Text style={[styles.timelineDate, { color: colors.textSecondary }]}>
+                        {formatDate(activity.date)}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Achievements Preview */}
+        <View style={[styles.bentoCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Conquistas</Text>
+          </View>
+          {unlockedAchievements.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="trophy-outline" size={28} color={colors.textTertiary} />
+              <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhuma conquista ainda</Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.achievementsGrid}>
+                {unlockedAchievements.map((a) => (
+                  <View key={a.id} style={[styles.achievementItem, { backgroundColor: colors.surfaceLow }]}>
+                    <Text style={styles.achievementIcon}>{a.icon}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/gamificacao')}>
+                <Text style={[styles.viewAllLink, { color: colors.primary }]}>+ ver todas ({totalAchievements})</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
-
-      <View style={[styles.section, { marginBottom: Spacing.xxl }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Atividade Recente</Text>
-        {recentActivity.length === 0 ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name="time-outline" size={32} color={colors.tabInactive} />
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>Nenhuma atividade ainda</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>Comece enviando uma redação ou fazendo um simulado</Text>
-          </View>
-        ) : (
-          recentActivity.map((activity) => (
-            <View
-              key={activity.id}
-              style={[styles.activityCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              <View style={[styles.activityDot, { backgroundColor: activity.type === 'essay' ? colors.accent : colors.success }]} />
-              <View style={styles.activityInfo}>
-                <Text style={[styles.activityTitle, { color: colors.text }]} numberOfLines={1}>{activity.title}</Text>
-                <Text style={[styles.activityDate, { color: colors.textSecondary }]}>{formatDate(activity.date)}</Text>
-              </View>
-              <Ionicons
-                name={activity.type === 'essay' ? 'document-text-outline' : 'school-outline'}
-                size={18}
-                color={colors.textSecondary}
-              />
-            </View>
-          ))
-        )}
-      </View>
     </ScrollView>
+  );
+}
+
+function StatCell({
+  icon,
+  value,
+  label,
+  bg,
+  fg,
+  darkBg,
+  darkFg,
+  isDark,
+}: {
+  icon: string;
+  value: string;
+  label: string;
+  bg: string;
+  fg: string;
+  darkBg: string;
+  darkFg: string;
+  isDark: boolean;
+}) {
+  return (
+    <View style={styles.statCell}>
+      <View style={[styles.statIconWrap, { backgroundColor: isDark ? darkBg : bg }]}>
+        <Ionicons name={icon as any} size={16} color={isDark ? darkFg : fg} />
+      </View>
+      <Text style={[styles.statValue, { color: isDark ? '#f3effc' : '#1b1b24' }]} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={[styles.statLabel, { color: isDark ? '#94a3b8' : '#64748b' }]} numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -246,15 +350,15 @@ const styles = {
     flex: 1,
   },
   contentContainer: {
-    paddingBottom: 24,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row' as const,
     justifyContent: 'space-between' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: Spacing.xl,
+    paddingHorizontal: 20,
     paddingTop: 60,
-    paddingBottom: Spacing.xl,
+    paddingBottom: 8,
   },
   greeting: {
     fontSize: FontSize.md,
@@ -275,103 +379,177 @@ const styles = {
     fontSize: FontSize.xl,
     fontWeight: '700' as const,
   },
-  section: {
-    marginTop: Spacing.xl,
-    paddingHorizontal: Spacing.xl,
+  body: {
+    paddingHorizontal: 20,
+    marginTop: 20,
+    gap: 20,
   },
-  sectionTitle: {
-    fontSize: FontSize.lg,
-    fontWeight: '600' as const,
-    marginBottom: Spacing.md,
+  streakCard: {
+    borderRadius: 24,
+    padding: 24,
+    backgroundColor: '#F59E0B',
+    overflow: 'hidden' as const,
   },
-  statsRow: {
-    paddingRight: Spacing.md,
-    gap: Spacing.sm,
+  streakRow: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'flex-start' as const,
   },
-  statCard: {
-    minWidth: 110,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
+  streakLeft: {
+    flex: 1,
+  },
+  streakFire: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  streakDias: {
+    fontSize: 30,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  streakSub: {
+    fontSize: FontSize.sm,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  levelBadgeOuter: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  levelBadgeText: {
+    color: '#FFFFFF',
+    fontSize: FontSize.sm,
+    fontWeight: '700' as const,
+  },
+  streakBarBg: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginTop: 16,
+    overflow: 'hidden' as const,
+  },
+  streakBarFill: {
+    height: '100%' as const,
+    borderRadius: 3,
+    backgroundColor: '#FFFFFF',
+  },
+  streakXpLabel: {
+    fontSize: FontSize.xs,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 6,
+  },
+  statsGridCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
     borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+  },
+  statsGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 12,
+  },
+  statCell: {
+    width: '47%' as any,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
   },
   statIconWrap: {
     width: 32,
     height: 32,
-    borderRadius: BorderRadius.sm,
+    borderRadius: 8,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
-    marginBottom: Spacing.sm,
+    marginBottom: 8,
   },
   statValue: {
-    fontSize: FontSize.lg,
+    fontSize: 18,
     fontWeight: '700' as const,
   },
   statLabel: {
-    fontSize: FontSize.xs,
+    fontSize: 10,
     marginTop: 2,
   },
-  actionsRow: {
-    flexDirection: 'row' as const,
-    gap: Spacing.sm,
-  },
-  actionBtn: {
-    flex: 1,
-    alignItems: 'center' as const,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
+  bentoCard: {
+    borderRadius: 24,
     borderWidth: 1,
+    padding: 24,
   },
-  actionIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center' as const,
+  sectionHeader: {
+    borderBottomWidth: 1,
+    paddingBottom: 16,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: FontSize.lg,
+    fontWeight: '700' as const,
+  },
+  emptyState: {
     alignItems: 'center' as const,
-    marginBottom: Spacing.sm,
-  },
-  actionLabel: {
-    fontSize: FontSize.xs,
-    fontWeight: '600' as const,
-    textAlign: 'center' as const,
-  },
-  emptyCard: {
-    alignItems: 'center' as const,
-    padding: Spacing.xxl,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    gap: Spacing.sm,
+    paddingVertical: 20,
+    gap: 8,
   },
   emptyText: {
-    fontSize: FontSize.md,
+    fontSize: FontSize.sm,
+  },
+  timeline: {
+    gap: 0,
+  },
+  timelineEntry: {
+    flexDirection: 'row' as const,
+    minHeight: 48,
+  },
+  timelineDotCol: {
+    width: 20,
+    alignItems: 'center' as const,
+  },
+  timelineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginTop: 4,
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    marginTop: 4,
+    marginBottom: -4,
+  },
+  timelineContent: {
+    flex: 1,
+    paddingBottom: 16,
+  },
+  timelineTitle: {
+    fontSize: FontSize.sm,
     fontWeight: '600' as const,
   },
-  emptySubtext: {
-    fontSize: FontSize.sm,
-    textAlign: 'center' as const,
-  },
-  activityCard: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
-    gap: Spacing.md,
-  },
-  activityDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  activityInfo: {
-    flex: 1,
-  },
-  activityTitle: {
-    fontSize: FontSize.sm,
-    fontWeight: '500' as const,
-  },
-  activityDate: {
+  timelineDate: {
     fontSize: FontSize.xs,
     marginTop: 2,
+  },
+  achievementsGrid: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: 12,
+  },
+  achievementItem: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  achievementIcon: {
+    fontSize: 22,
+  },
+  viewAllLink: {
+    fontSize: FontSize.sm,
+    fontWeight: '600' as const,
+    marginTop: 16,
+    textAlign: 'center' as const,
   },
 };

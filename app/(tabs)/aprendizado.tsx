@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,47 @@ import { supabase, upsertProfile, getProfile } from '../../lib/supabase';
 import { Colors, getColors, Spacing, FontSize, BorderRadius } from '../../lib/theme';
 import { XP_REWARDS } from '../../lib/gamification';
 
-const SUBJECTS = [
-  { key: 'redacao', label: 'Redação', icon: 'document-text' as const },
-  { key: 'linguagens', label: 'Linguagens', icon: 'book' as const },
-  { key: 'humanas', label: 'Humanas', icon: 'earth' as const },
-  { key: 'natureza', label: 'Natureza', icon: 'leaf' as const },
-  { key: 'matematica', label: 'Matemática', icon: 'calculator' as const },
+const CATEGORIES = [
+  {
+    key: 'matematica',
+    label: 'Matemática',
+    description: 'Álgebra, geometria, estatística e mais',
+    icon: 'calculator' as const,
+    bgColor: '#dbeafe',
+    iconColor: '#2563EB',
+  },
+  {
+    key: 'natureza',
+    label: 'Ciências da Natureza',
+    description: 'Biologia, química e física',
+    icon: 'leaf' as const,
+    bgColor: '#d1fae5',
+    iconColor: '#10b981',
+  },
+  {
+    key: 'humanas',
+    label: 'Ciências Humanas',
+    description: 'História, geografia e sociologia',
+    icon: 'earth' as const,
+    bgColor: '#ede9fe',
+    iconColor: '#7c3aed',
+  },
+  {
+    key: 'linguagens',
+    label: 'Linguagens',
+    description: 'Gramática, literatura e interpretação',
+    icon: 'book' as const,
+    bgColor: '#fef3c7',
+    iconColor: '#f59e0b',
+  },
+  {
+    key: 'geral',
+    label: 'Geral',
+    description: 'Revisão geral do ENEM',
+    icon: 'school' as const,
+    bgColor: '#e0e7ff',
+    iconColor: '#4f46e5',
+  },
 ];
 
 interface Block {
@@ -64,48 +99,35 @@ export default function AprendizadoScreen() {
   const [showResults, setShowResults] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
   const [savingXp, setSavingXp] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [elapsedTime, setElapsedTime] = useState(0);
   const colorScheme = useColorScheme();
   const colors = getColors(colorScheme);
   const scrollRef = useRef<ScrollView>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handleGenerate = async () => {
-    if (!selectedSubject) {
-      Alert.alert('Selecione uma matéria', 'Escolha uma matéria antes de gerar a aula.');
-      return;
-    }
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
-    setLoading(true);
-    setLesson(null);
-    setAnswers({});
-    setShowResults(false);
-    setXpEarned(0);
-
-    try {
-      const data = await generateLesson(selectedSubject);
-      if (data.cura) {
-        const result = await pollCura(data.cura);
-        setLesson(result);
-      } else {
-        setLesson(data);
-      }
-    } catch (e: any) {
-      Alert.alert('Erro', e.message || 'Não foi possível gerar a aula.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getInteractiveBlocks = () => {
+  const getAllBlocks = (): { cycleIndex: number; blockIndex: number; block: Block }[] => {
     if (!lesson) return [];
     const blocks: { cycleIndex: number; blockIndex: number; block: Block }[] = [];
     lesson.cycles.forEach((cycle, ci) => {
       cycle.blocks.forEach((block, bi) => {
-        if (block.type === 'interactive' || block.type === 'challenge') {
-          blocks.push({ cycleIndex: ci, blockIndex: bi, block });
-        }
+        blocks.push({ cycleIndex: ci, blockIndex: bi, block });
       });
     });
     return blocks;
+  };
+
+  const allBlocks = getAllBlocks();
+  const totalSteps = allBlocks.length;
+
+  const getInteractiveBlocks = () => {
+    return allBlocks.filter(({ block }) => block.type === 'interactive' || block.type === 'challenge');
   };
 
   const totalInteractive = getInteractiveBlocks().length;
@@ -116,6 +138,36 @@ export default function AprendizadoScreen() {
     return answer !== undefined && answer === block.correctIndex;
   }).length;
 
+  const handleGenerate = async (subjectKey: string) => {
+    setSelectedSubject(subjectKey);
+    setLoading(true);
+    setLesson(null);
+    setAnswers({});
+    setShowResults(false);
+    setXpEarned(0);
+    setCurrentStep(0);
+    setElapsedTime(0);
+
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    try {
+      const data = await generateLesson(subjectKey);
+      if (data.cura) {
+        const result = await pollCura(data.cura);
+        setLesson(result);
+      } else {
+        setLesson(data);
+      }
+      timerRef.current = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
+    } catch (e: any) {
+      Alert.alert('Erro', e.message || 'Não foi possível gerar a aula.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAnswer = (cycleIndex: number, blockIndex: number, optionIndex: number) => {
     const key = cycleIndex * 100 + blockIndex;
     if (answers[key] !== undefined) return;
@@ -123,6 +175,11 @@ export default function AprendizadoScreen() {
   };
 
   const handleFinish = async () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
     const xp = correctCount * XP_REWARDS.QUESTION_CORRECT;
     setXpEarned(xp);
     setShowResults(true);
@@ -143,352 +200,669 @@ export default function AprendizadoScreen() {
     setSavingXp(false);
   };
 
+  const handleNext = () => {
+    if (currentStep < totalSteps - 1) {
+      setCurrentStep((prev) => prev + 1);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    } else {
+      handleFinish();
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentStep > 0) {
+      setCurrentStep((prev) => prev - 1);
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    }
+  };
+
   const handleReset = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     setLesson(null);
     setAnswers({});
     setShowResults(false);
     setXpEarned(0);
+    setCurrentStep(0);
+    setElapsedTime(0);
+    setSelectedSubject(null);
   };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const renderHeader = () => (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.lg,
+        paddingTop: 56,
+        paddingBottom: Spacing.lg,
+        backgroundColor: colors.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+      }}
+    >
+      <Ionicons name="school" size={28} color={colors.primary} />
+      <Text
+        style={{
+          fontSize: FontSize.xl,
+          fontWeight: '700',
+          color: colors.text,
+          marginLeft: Spacing.sm,
+        }}
+      >
+        Aprendizado
+      </Text>
+    </View>
+  );
 
   if (showResults) {
     return (
-      <ScrollView
-        style={{ flex: 1, backgroundColor: colors.bg }}
-        contentContainerStyle={{ padding: Spacing.xl, alignItems: 'center', paddingTop: 60 }}
-      >
-        <View
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 40,
-            backgroundColor: colors.successLight,
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: Spacing.lg,
-          }}
-        >
-          <Ionicons name="trophy" size={40} color={colors.success} />
-        </View>
-        <Text style={{ fontSize: FontSize.xxl, fontWeight: 'bold', color: colors.text, marginBottom: Spacing.sm }}>
-          Aula Finalizada!
-        </Text>
-        <Text style={{ fontSize: FontSize.lg, color: colors.textSecondary, marginBottom: Spacing.xxl, textAlign: 'center' }}>
-          Você acertou {correctCount} de {totalInteractive} questões interativas
-        </Text>
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: BorderRadius.lg,
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        {renderHeader()}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{
             padding: Spacing.xl,
-            width: '100%',
             alignItems: 'center',
-            marginBottom: Spacing.xl,
-            borderWidth: 1,
-            borderColor: colors.border,
+            paddingTop: Spacing.xxl,
           }}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary, marginBottom: Spacing.xs }}>
-            XP Ganho
-          </Text>
-          <Text style={{ fontSize: FontSize.xxxl, fontWeight: 'bold', color: colors.accent }}>
-            +{xpEarned} XP
-          </Text>
-          {savingXp && (
-            <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: Spacing.sm }} />
-          )}
-        </View>
+          <View
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 40,
+              backgroundColor: colors.successLight,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: Spacing.lg,
+            }}
+          >
+            <Ionicons name="trophy" size={40} color={colors.success} />
+          </View>
 
-        <View style={{ width: '100%', gap: Spacing.md }}>
+          <Text
+            style={{
+              fontSize: FontSize.xxl,
+              fontWeight: 'bold',
+              color: colors.text,
+              marginBottom: Spacing.sm,
+            }}
+          >
+            Aula Concluída!
+          </Text>
+          <Text
+            style={{
+              fontSize: FontSize.md,
+              color: colors.textSecondary,
+              marginBottom: Spacing.xxl,
+              textAlign: 'center',
+            }}
+          >
+            Parabéns! Você completou a aula.
+          </Text>
+
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              borderRadius: BorderRadius.xxl,
+              padding: 24,
+              width: '100%',
+              borderWidth: 1,
+              borderColor: colors.border,
+              marginBottom: Spacing.xl,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+              <View style={{ alignItems: 'center', flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: FontSize.xs,
+                    color: colors.textSecondary,
+                    marginBottom: Spacing.xs,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1,
+                  }}
+                >
+                  Acertos
+                </Text>
+                <Text
+                  style={{
+                    fontSize: FontSize.xxl,
+                    fontWeight: 'bold',
+                    color: colors.primary,
+                  }}
+                >
+                  {correctCount}/{totalInteractive}
+                </Text>
+              </View>
+
+              <View style={{ width: 1, backgroundColor: colors.border }} />
+
+              <View style={{ alignItems: 'center', flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: FontSize.xs,
+                    color: colors.textSecondary,
+                    marginBottom: Spacing.xs,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1,
+                  }}
+                >
+                  XP Ganho
+                </Text>
+                <Text
+                  style={{
+                    fontSize: FontSize.xxl,
+                    fontWeight: 'bold',
+                    color: colors.warning,
+                  }}
+                >
+                  +{xpEarned}
+                </Text>
+                {savingXp && (
+                  <ActivityIndicator
+                    size="small"
+                    color={colors.warning}
+                    style={{ marginTop: 2 }}
+                  />
+                )}
+              </View>
+
+              <View style={{ width: 1, backgroundColor: colors.border }} />
+
+              <View style={{ alignItems: 'center', flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: FontSize.xs,
+                    color: colors.textSecondary,
+                    marginBottom: Spacing.xs,
+                    textTransform: 'uppercase',
+                    letterSpacing: 1,
+                  }}
+                >
+                  Tempo
+                </Text>
+                <Text
+                  style={{
+                    fontSize: FontSize.xxl,
+                    fontWeight: 'bold',
+                    color: colors.text,
+                  }}
+                >
+                  {formatTime(elapsedTime)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
           <TouchableOpacity
             style={{
               backgroundColor: colors.primary,
-              borderRadius: BorderRadius.md,
+              borderRadius: BorderRadius.sm,
               padding: Spacing.lg,
               alignItems: 'center',
+              width: '100%',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: Spacing.sm,
             }}
             onPress={handleReset}
           >
-            <Text style={{ color: '#fff', fontSize: FontSize.lg, fontWeight: '700' }}>
-              Gerar Nova Aula
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: FontSize.md, fontWeight: '700' }}>
+              Voltar às Categorias
             </Text>
           </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        {renderHeader()}
+        <View
+          style={{
+            flex: 1,
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: Spacing.xl,
+          }}
+        >
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text
+            style={{
+              fontSize: FontSize.lg,
+              color: colors.textSecondary,
+              marginTop: Spacing.lg,
+              fontWeight: '600',
+            }}
+          >
+            Gerando aula...
+          </Text>
+          <Text
+            style={{
+              fontSize: FontSize.sm,
+              color: colors.textTertiary,
+              marginTop: Spacing.sm,
+            }}
+          >
+            Aguarde enquanto preparamos seu conteúdo
+          </Text>
         </View>
-      </ScrollView>
+      </View>
+    );
+  }
+
+  if (lesson) {
+    const stepData = allBlocks[currentStep];
+    const progressPct = totalSteps > 0 ? (currentStep + 1) / totalSteps : 0;
+
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            paddingTop: 56,
+            paddingBottom: Spacing.md,
+            paddingHorizontal: Spacing.lg,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              marginBottom: Spacing.md,
+            }}
+          >
+            <TouchableOpacity
+              onPress={handleReset}
+              style={{ padding: Spacing.xs, marginRight: Spacing.sm }}
+            >
+              <Ionicons name="close" size={24} color={colors.danger} />
+            </TouchableOpacity>
+            <Text
+              style={{
+                flex: 1,
+                fontSize: FontSize.lg,
+                fontWeight: '700',
+                color: colors.text,
+              }}
+            >
+              {selectedSubject
+                ? CATEGORIES.find((c) => c.key === selectedSubject)?.label || selectedSubject
+                : 'Aula'}
+            </Text>
+            <Text
+              style={{
+                fontSize: FontSize.sm,
+                fontWeight: '600',
+                color: colors.textSecondary,
+              }}
+            >
+              {currentStep + 1}/{totalSteps}
+            </Text>
+          </View>
+
+          <View
+            style={{
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: colors.surfaceDim,
+              overflow: 'hidden',
+            }}
+          >
+            <View
+              style={{
+                height: '100%',
+                borderRadius: 4,
+                backgroundColor: colors.primary,
+                width: `${progressPct * 100}%`,
+              }}
+            />
+          </View>
+        </View>
+
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1 }}
+          contentContainerStyle={{
+            padding: Spacing.lg,
+            paddingBottom: 100,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {stepData && (
+            <View
+              style={{
+                backgroundColor: colors.surface,
+                borderRadius: BorderRadius.xxl,
+                padding: 24,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: FontSize.xs,
+                  fontFamily: 'monospace',
+                  color: colors.textTertiary,
+                  textTransform: 'uppercase',
+                  letterSpacing: 1,
+                  marginBottom: Spacing.md,
+                }}
+              >
+                Passo {currentStep + 1} de {totalSteps}
+              </Text>
+
+              {stepData.block.cabritoSpeech ? (
+                <View
+                  style={{
+                    backgroundColor: colors.accentLight,
+                    borderRadius: BorderRadius.md,
+                    padding: Spacing.md,
+                    marginBottom: Spacing.lg,
+                    flexDirection: 'row',
+                    gap: Spacing.sm,
+                  }}
+                >
+                  <Text style={{ fontSize: FontSize.xl }}>{"\uD83D\uDC10"}</Text>
+                  <Text
+                    style={{
+                      fontSize: FontSize.sm,
+                      color: colors.text,
+                      flex: 1,
+                      lineHeight: 20,
+                    }}
+                  >
+                    {stepData.block.cabritoSpeech}
+                  </Text>
+                </View>
+              ) : null}
+
+              <Text
+                style={{
+                  fontSize: FontSize.md,
+                  color: colors.text,
+                  lineHeight: 24,
+                }}
+              >
+                {stepData.block.content}
+              </Text>
+
+              {stepData.block.options && stepData.block.options.length > 0 && (
+                <View style={{ marginTop: Spacing.lg, gap: Spacing.sm }}>
+                  {stepData.block.options.map((opt, oi) => {
+                    const key = stepData.cycleIndex * 100 + stepData.blockIndex;
+                    const selected = answers[key] === oi;
+                    const isAnswered = answers[key] !== undefined;
+                    const isCorrect =
+                      stepData.block.correctIndex !== undefined &&
+                      answers[key] === stepData.block.correctIndex;
+                    const showCorrect = isAnswered && oi === stepData.block.correctIndex;
+
+                    let bgColor = colors.surface;
+                    let borderColor = colors.border;
+                    let textColor = colors.text;
+
+                    if (showCorrect) {
+                      bgColor = colors.successLight;
+                      borderColor = colors.success;
+                      textColor = colors.success;
+                    } else if (selected && !isCorrect) {
+                      bgColor = colors.dangerLight;
+                      borderColor = colors.danger;
+                      textColor = colors.danger;
+                    }
+
+                    return (
+                      <TouchableOpacity
+                        key={oi}
+                        style={{
+                          backgroundColor: bgColor,
+                          borderWidth: 1.5,
+                          borderColor,
+                          borderRadius: BorderRadius.sm,
+                          padding: Spacing.md,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: Spacing.md,
+                          opacity: isAnswered && !selected && !showCorrect ? 0.5 : 1,
+                        }}
+                        onPress={() =>
+                          handleAnswer(stepData.cycleIndex, stepData.blockIndex, oi)
+                        }
+                        disabled={isAnswered}
+                      >
+                        <View
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 16,
+                            backgroundColor: showCorrect
+                              ? colors.success
+                              : selected
+                              ? colors.danger
+                              : colors.input,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {isAnswered && showCorrect ? (
+                            <Ionicons name="checkmark" size={16} color="#fff" />
+                          ) : isAnswered && selected && !isCorrect ? (
+                            <Ionicons name="close" size={16} color="#fff" />
+                          ) : (
+                            <Text
+                              style={{
+                                fontSize: FontSize.sm,
+                                fontWeight: '700',
+                                color: selected ? '#fff' : colors.textSecondary,
+                              }}
+                            >
+                              {opt.letter}
+                            </Text>
+                          )}
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: FontSize.sm,
+                            color: textColor,
+                            flex: 1,
+                            lineHeight: 20,
+                          }}
+                        >
+                          {opt.text}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+        </ScrollView>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            paddingHorizontal: Spacing.lg,
+            paddingVertical: Spacing.md,
+            paddingBottom: 32,
+            backgroundColor: colors.surface,
+            borderTopWidth: 1,
+            borderTopColor: colors.border,
+            gap: Spacing.sm,
+          }}
+        >
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.xs,
+              paddingHorizontal: Spacing.lg,
+              paddingVertical: Spacing.md,
+              borderRadius: BorderRadius.sm,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.input,
+              opacity: currentStep === 0 ? 0.4 : 1,
+            }}
+            onPress={handlePrev}
+            disabled={currentStep === 0}
+          >
+            <Ionicons name="chevron-back" size={18} color={colors.text} />
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.text }}>
+              Anterior
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.xs,
+              paddingHorizontal: Spacing.xl,
+              paddingVertical: Spacing.md,
+              borderRadius: BorderRadius.sm,
+              flex: 1,
+              justifyContent: 'center',
+              backgroundColor: colors.primary,
+            }}
+            onPress={handleNext}
+          >
+            <Text style={{ fontSize: FontSize.sm, fontWeight: '700', color: '#fff' }}>
+              {currentStep === totalSteps - 1 ? 'Finalizar' : 'Próximo'}
+            </Text>
+            <Ionicons
+              name={currentStep === totalSteps - 1 ? 'checkmark' : 'chevron-forward'}
+              size={18}
+              color="#fff"
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      style={{ flex: 1, backgroundColor: colors.bg }}
-      contentContainerStyle={{ padding: Spacing.xl, paddingBottom: 40 }}
-    >
-      <Text style={{ fontSize: FontSize.xxl, fontWeight: 'bold', color: colors.text, marginTop: 48, marginBottom: Spacing.xs }}>
-        Aprendizado
-      </Text>
-      <Text style={{ fontSize: FontSize.md, color: colors.textSecondary, marginBottom: Spacing.xl }}>
-        Escolha uma matéria e gere uma aula personalizada
-      </Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      {renderHeader()}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: Spacing.lg,
+          paddingBottom: 40,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text
+          style={{
+            fontSize: FontSize.xxl,
+            fontWeight: 'bold',
+            color: colors.text,
+            marginBottom: Spacing.xs,
+          }}
+        >
+          Aprendizado
+        </Text>
+        <Text
+          style={{
+            fontSize: FontSize.md,
+            color: colors.textSecondary,
+            marginBottom: Spacing.xl,
+          }}
+        >
+          Estude com explicações personalizadas por IA
+        </Text>
 
-      <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: colors.textSecondary, marginBottom: Spacing.sm, textTransform: 'uppercase', letterSpacing: 1 }}>
-        Matéria
-      </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginBottom: Spacing.xl }}>
-        {SUBJECTS.map((s) => {
-          const active = selectedSubject === s.key;
-          return (
-            <TouchableOpacity
-              key={s.key}
-              onPress={() => setSelectedSubject(s.key)}
+        <View
+          style={{
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            gap: Spacing.md,
+          }}
+        >
+          {CATEGORIES.map((cat) => (
+            <View
+              key={cat.key}
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: active ? colors.primary : colors.surface,
+                width: '47%',
+                backgroundColor: colors.surface,
+                borderRadius: BorderRadius.xxl,
                 borderWidth: 1,
-                borderColor: active ? colors.primary : colors.border,
-                borderRadius: BorderRadius.full,
-                paddingVertical: Spacing.sm,
-                paddingHorizontal: Spacing.lg,
-                gap: Spacing.xs,
+                borderColor: colors.border,
+                padding: 24,
               }}
             >
-              <Ionicons
-                name={s.icon}
-                size={16}
-                color={active ? '#fff' : colors.textSecondary}
-              />
-              <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: active ? '#fff' : colors.text }}>
-                {s.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <TouchableOpacity
-        style={{
-          backgroundColor: selectedSubject ? colors.primary : colors.surfaceAlt,
-          borderRadius: BorderRadius.md,
-          padding: Spacing.lg,
-          alignItems: 'center',
-          opacity: loading ? 0.7 : 1,
-          borderWidth: 1,
-          borderColor: selectedSubject ? colors.primary : colors.border,
-        }}
-        onPress={handleGenerate}
-        disabled={loading || !selectedSubject}
-      >
-        {loading ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-            <ActivityIndicator color="#fff" />
-            <Text style={{ color: '#fff', fontSize: FontSize.lg, fontWeight: '700' }}>
-              Gerando aula...
-            </Text>
-          </View>
-        ) : (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-            <Ionicons name="sparkles" size={20} color={selectedSubject ? '#fff' : colors.textSecondary} />
-            <Text style={{ color: selectedSubject ? '#fff' : colors.textSecondary, fontSize: FontSize.lg, fontWeight: '700' }}>
-              Gerar Aula
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-
-      {lesson && (
-        <View style={{ marginTop: Spacing.xxl }}>
-          {lesson.title && (
-            <Text style={{ fontSize: FontSize.xl, fontWeight: 'bold', color: colors.text, marginBottom: Spacing.xs }}>
-              {lesson.title}
-            </Text>
-          )}
-          {lesson.description && (
-            <Text style={{ fontSize: FontSize.md, color: colors.textSecondary, marginBottom: Spacing.xl }}>
-              {lesson.description}
-            </Text>
-          )}
-
-          {lesson.cycles.map((cycle, ci) => (
-            <View key={ci} style={{ marginBottom: Spacing.xxl }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.sm }}>
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    backgroundColor: colors.primary,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: '#fff', fontSize: FontSize.xs, fontWeight: 'bold' }}>
-                    {ci + 1}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: FontSize.lg, fontWeight: 'bold', color: colors.text }}>
-                    {cycle.title}
-                  </Text>
-                  {cycle.subtitle && (
-                    <Text style={{ fontSize: FontSize.sm, color: colors.textSecondary }}>
-                      {cycle.subtitle}
-                    </Text>
-                  )}
-                </View>
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 12,
+                  backgroundColor: cat.bgColor,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: Spacing.md,
+                }}
+              >
+                <Ionicons name={cat.icon} size={20} color={cat.iconColor} />
               </View>
 
-              {cycle.blocks.map((block, bi) => {
-                const key = ci * 100 + bi;
-                const iconInfo = BLOCK_ICONS[block.type] || BLOCK_ICONS.explanation;
-                const isAnswered = answers[key] !== undefined;
-                const isCorrect = block.correctIndex !== undefined && answers[key] === block.correctIndex;
+              <Text
+                style={{
+                  fontSize: FontSize.md,
+                  fontWeight: '600',
+                  color: colors.text,
+                  marginBottom: Spacing.xs,
+                }}
+              >
+                {cat.label}
+              </Text>
 
-                return (
-                  <View
-                    key={bi}
-                    style={{
-                      backgroundColor: colors.surface,
-                      borderRadius: BorderRadius.lg,
-                      padding: Spacing.lg,
-                      marginBottom: Spacing.md,
-                      borderWidth: 1,
-                      borderColor: isAnswered
-                        ? (isCorrect ? colors.success : colors.danger)
-                        : colors.border,
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md }}>
-                      <View
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: BorderRadius.sm,
-                          backgroundColor: iconInfo.color + '20',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Ionicons name={iconInfo.name as any} size={18} color={iconInfo.color} />
-                      </View>
-                      <Text style={{ fontSize: FontSize.sm, fontWeight: '600', color: iconInfo.color }}>
-                        {BLOCK_LABELS[block.type] || block.type}
-                      </Text>
-                    </View>
+              <Text
+                style={{
+                  fontSize: FontSize.xs,
+                  color: colors.textSecondary,
+                  marginBottom: Spacing.lg,
+                  lineHeight: 16,
+                }}
+              >
+                {cat.description}
+              </Text>
 
-                    {block.cabritoSpeech ? (
-                      <View
-                        style={{
-                          backgroundColor: colors.accentLight,
-                          borderRadius: BorderRadius.md,
-                          padding: Spacing.md,
-                          marginBottom: Spacing.md,
-                          flexDirection: 'row',
-                          gap: Spacing.sm,
-                        }}
-                      >
-                        <Text style={{ fontSize: FontSize.xl }}>🐐</Text>
-                        <Text style={{ fontSize: FontSize.sm, color: colors.text, flex: 1, lineHeight: 20 }}>
-                          {block.cabritoSpeech}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    <Text style={{ fontSize: FontSize.md, color: colors.text, lineHeight: 22 }}>
-                      {block.content}
-                    </Text>
-
-                    {block.options && block.options.length > 0 && (
-                      <View style={{ marginTop: Spacing.md, gap: Spacing.sm }}>
-                        {block.options.map((opt, oi) => {
-                          const selected = answers[key] === oi;
-                          const showCorrect = isAnswered && oi === block.correctIndex;
-                          let bgColor = colors.surfaceAlt;
-                          let borderColor = colors.border;
-                          let textColor = colors.text;
-
-                          if (showCorrect) {
-                            bgColor = colors.successLight;
-                            borderColor = colors.success;
-                            textColor = colors.success;
-                          } else if (selected && !isCorrect) {
-                            bgColor = colors.dangerLight;
-                            borderColor = colors.danger;
-                            textColor = colors.danger;
-                          }
-
-                          return (
-                            <TouchableOpacity
-                              key={oi}
-                              style={{
-                                backgroundColor: bgColor,
-                                borderWidth: 1,
-                                borderColor,
-                                borderRadius: BorderRadius.md,
-                                padding: Spacing.md,
-                                flexDirection: 'row',
-                                alignItems: 'center',
-                                gap: Spacing.sm,
-                                opacity: isAnswered && !selected && !showCorrect ? 0.5 : 1,
-                              }}
-                              onPress={() => handleAnswer(ci, bi, oi)}
-                              disabled={isAnswered}
-                            >
-                              <View
-                                style={{
-                                  width: 28,
-                                  height: 28,
-                                  borderRadius: 14,
-                                  borderWidth: 1.5,
-                                  borderColor: showCorrect ? colors.success : selected ? textColor : colors.border,
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                {isAnswered && showCorrect ? (
-                                  <Ionicons name="checkmark" size={16} color={colors.success} />
-                                ) : isAnswered && selected && !isCorrect ? (
-                                  <Ionicons name="close" size={16} color={colors.danger} />
-                                ) : (
-                                  <Text style={{ fontSize: FontSize.xs, fontWeight: '600', color: colors.textSecondary }}>
-                                    {opt.letter}
-                                  </Text>
-                                )}
-                              </View>
-                              <Text style={{ fontSize: FontSize.sm, color: textColor, flex: 1 }}>
-                                {opt.text}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
+              <TouchableOpacity
+                style={{
+                  backgroundColor: 'transparent',
+                  paddingVertical: Spacing.sm,
+                  paddingHorizontal: 0,
+                }}
+                onPress={() => handleGenerate(cat.key)}
+              >
+                <Text
+                  style={{
+                    fontSize: FontSize.md,
+                    fontWeight: '600',
+                    color: '#2563EB',
+                  }}
+                >
+                  Estudar
+                </Text>
+              </TouchableOpacity>
             </View>
           ))}
-
-          {totalInteractive > 0 && !showResults && (
-            <TouchableOpacity
-              style={{
-                backgroundColor: colors.accent,
-                borderRadius: BorderRadius.md,
-                padding: Spacing.lg,
-                alignItems: 'center',
-                marginTop: Spacing.md,
-                opacity: Object.keys(answers).length < totalInteractive ? 0.5 : 1,
-              }}
-              onPress={handleFinish}
-              disabled={Object.keys(answers).length < totalInteractive}
-            >
-              <Text style={{ color: '#fff', fontSize: FontSize.lg, fontWeight: '700' }}>
-                Finalizar Aula ({Object.keys(answers).length}/{totalInteractive})
-              </Text>
-            </TouchableOpacity>
-          )}
         </View>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }

@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
-import { useColorScheme } from 'react-native';
+import { useColorScheme, View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../lib/theme';
+import { Colors, FontSize } from '../../lib/theme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
@@ -11,71 +11,85 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false,
-        tabBarActiveTintColor: colors.primary,
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
+          marginTop: -2,
+          marginBottom: 2,
+        },
         tabBarStyle: {
           backgroundColor: colors.tab,
           borderTopColor: colors.border,
-          height: 56,
+          borderTopWidth: 1,
+          height: 60,
           paddingBottom: 8,
-          paddingTop: 8,
+          paddingTop: 6,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
+          title: 'Início',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+            <Ionicons name="home" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="redacao"
         options={{
+          title: 'Redação',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="document-text-outline" size={size} color={color} />
+            <Ionicons name="document-text" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="aprendizado"
         options={{
+          title: 'Estudos',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="school-outline" size={size} color={color} />
+            <Ionicons name="school" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="simulados"
         options={{
+          title: 'Simulados',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book-outline" size={size} color={color} />
+            <Ionicons name="book" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="perguntas"
         options={{
+          title: 'Questões',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="help-circle-outline" size={size} color={color} />
+            <Ionicons name="help-circle" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="perfil"
         options={{
+          title: 'Perfil',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+            <Ionicons name="person" size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="configuracoes"
         options={{
+          title: 'Config',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+            <Ionicons name="settings-sharp" size={22} color={color} />
           ),
         }}
       />
