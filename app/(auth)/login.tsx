@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,11 @@ import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
-import { Colors, getColors } from '../../lib/theme';
+import { getColors } from '../../lib/theme';
 
 const WEB_URL = 'https://apexenem.vercel.app';
-const REDIRECT_URL = Linking.createURL('auth-callback');
+const REDIRECT_URL = `${WEB_URL}/auth-callback`;
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -30,22 +29,6 @@ export default function LoginScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = getColors(colorScheme);
-
-  useEffect(() => {
-    const sub = Linking.addEventListener('url', async ({ url }) => {
-      if (url.includes('auth-callback')) {
-        const params = new URL(url.replace('apexenem://', 'https://placeholder.com/'));
-        const access_token = params.searchParams.get('access_token');
-        const refresh_token = params.searchParams.get('refresh_token');
-
-        if (access_token && refresh_token) {
-          await supabase.auth.setSession({ access_token, refresh_token });
-          router.replace('/(tabs)');
-        }
-      }
-    });
-    return () => sub.remove();
-  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -76,9 +59,25 @@ export default function LoginScreen() {
     setBrowserLoading(true);
     try {
       const redirect = encodeURIComponent(REDIRECT_URL);
-      await WebBrowser.openBrowserAsync(`${WEB_URL}/login?redirect_to=${redirect}`);
-    } catch {
-      Alert.alert('Erro', 'Não foi possível abrir o navegador.');
+      const result = await WebBrowser.openAuthSessionAsync(
+        `${WEB_URL}/?redirect_to=${redirect}`,
+        REDIRECT_URL
+      );
+
+      if (result.type === 'success' && result.url) {
+        const url = new URL(result.url);
+        const access_token = url.searchParams.get('access_token');
+        const refresh_token = url.searchParams.get('refresh_token');
+
+        if (access_token && refresh_token) {
+          await supabase.auth.setSession({ access_token, refresh_token });
+          router.replace('/(tabs)');
+        } else {
+          Alert.alert('Erro', 'Não foi possível obter as credenciais.');
+        }
+      }
+    } catch (e: any) {
+      Alert.alert('Erro', e?.message || 'Não foi possível abrir o navegador.');
     } finally {
       setBrowserLoading(false);
     }

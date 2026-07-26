@@ -13,8 +13,11 @@ import {
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../../lib/supabase';
-import { Colors, getColors } from '../../lib/theme';
+import { getColors } from '../../lib/theme';
+
+const WEB_URL = 'https://apexenem.vercel.app';
 
 export default function SignupScreen() {
   const [name, setName] = useState('');
@@ -23,6 +26,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [browserLoading, setBrowserLoading] = useState(false);
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = getColors(colorScheme);
@@ -53,33 +57,16 @@ export default function SignupScreen() {
       },
     });
 
+    setLoading(false);
+
     if (error) {
-      setLoading(false);
+      if (error.message.includes('captcha') || error.message.includes('hcaptcha')) {
+        handleBrowserSignup();
+        return;
+      }
       Alert.alert('Erro ao criar conta', error.message);
       return;
     }
-
-    if (data.user) {
-      try {
-        const response = await fetch('/api/auth/create-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: data.user.id,
-            name: name.trim(),
-            email: email.trim().toLowerCase(),
-          }),
-        });
-
-        if (!response.ok) {
-          console.warn('Profile creation returned status', response.status);
-        }
-      } catch (err) {
-        console.warn('Profile creation failed:', err);
-      }
-    }
-
-    setLoading(false);
 
     if (data.session) {
       router.replace('/(tabs)');
@@ -89,6 +76,21 @@ export default function SignupScreen() {
         'Verifique seu email para confirmar sua conta.'
       );
       router.replace('/(auth)/login');
+    }
+  };
+
+  const handleBrowserSignup = async () => {
+    setBrowserLoading(true);
+    try {
+      await WebBrowser.openBrowserAsync(`${WEB_URL}/signup`);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        router.replace('/(tabs)');
+      }
+    } catch (e: any) {
+      Alert.alert('Erro', e?.message || 'Não foi possível abrir o navegador.');
+    } finally {
+      setBrowserLoading(false);
     }
   };
 
@@ -249,6 +251,33 @@ export default function SignupScreen() {
               <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
                 Criar Conta
               </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 12,
+              padding: 16,
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+            onPress={handleBrowserSignup}
+            disabled={browserLoading}
+          >
+            {browserLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="globe-outline" size={20} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '600' }}>
+                  Criar pelo navegador
+                </Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
