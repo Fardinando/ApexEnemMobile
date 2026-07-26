@@ -1,0 +1,51 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo CLI
+        run: npm install -g eas-cli
+
+      - name: Build APK (EAS Build)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            --json
+
+      - name: Download APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          BUILD_ID=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].id')
+          eas build:download --id "$BUILD_ID" --path ./apk-output
+        if: success()
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: apexenem-android
+          path: ./apk-output/*.apk
+          retention-days: 30
