@@ -35,7 +35,8 @@
           "cameraPermission": "Permitir acesso à câmera para fotografar redações"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

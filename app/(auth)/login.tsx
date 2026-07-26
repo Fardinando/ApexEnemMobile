@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,17 +13,39 @@ import {
 import { useRouter, Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { Colors, getColors } from '../../lib/theme';
+
+const WEB_URL = 'https://apexenem.vercel.app';
+const REDIRECT_URL = Linking.createURL('auth-callback');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [browserLoading, setBrowserLoading] = useState(false);
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = getColors(colorScheme);
+
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', async ({ url }) => {
+      if (url.includes('auth-callback')) {
+        const params = new URL(url.replace('apexenem://', 'https://placeholder.com/'));
+        const access_token = params.searchParams.get('access_token');
+        const refresh_token = params.searchParams.get('refresh_token');
+
+        if (access_token && refresh_token) {
+          await supabase.auth.setSession({ access_token, refresh_token });
+          router.replace('/(tabs)');
+        }
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -32,20 +54,34 @@ export default function LoginScreen() {
     }
 
     setLoading(true);
-
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim().toLowerCase(),
       password,
     });
-
     setLoading(false);
 
     if (error) {
+      if (error.message.includes('captcha') || error.message.includes('hcaptcha')) {
+        handleBrowserLogin();
+        return;
+      }
       Alert.alert('Erro ao entrar', error.message);
       return;
     }
 
     router.replace('/(tabs)');
+  };
+
+  const handleBrowserLogin = async () => {
+    setBrowserLoading(true);
+    try {
+      const redirect = encodeURIComponent(REDIRECT_URL);
+      await WebBrowser.openBrowserAsync(`${WEB_URL}/login?redirect_to=${redirect}`);
+    } catch {
+      Alert.alert('Erro', 'Não foi possível abrir o navegador.');
+    } finally {
+      setBrowserLoading(false);
+    }
   };
 
   return (
@@ -159,6 +195,33 @@ export default function LoginScreen() {
               <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>
                 Entrar
               </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: 12,
+              padding: 16,
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+            onPress={handleBrowserLogin}
+            disabled={browserLoading}
+          >
+            {browserLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <>
+                <Ionicons name="globe-outline" size={20} color={colors.primary} />
+                <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '600' }}>
+                  Entrar pelo navegador
+                </Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
