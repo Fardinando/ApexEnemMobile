@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, getColors, Spacing, FontSize, BorderRadius } from '../../lib/theme';
-import { supabase } from '../../lib/supabase';
+import { Colors, getColors, Spacing, FontSize, BorderRadius } from '../lib/theme';
+import { supabase } from '../lib/supabase';
 
 const API_BASE = 'https://apexenem.vercel.app';
 

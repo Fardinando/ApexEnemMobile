@@ -11,14 +11,14 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Colors, getColors, Spacing, FontSize, BorderRadius } from '../../lib/theme';
-import { supabase } from '../../lib/supabase';
+import { Colors, getColors, Spacing, FontSize, BorderRadius } from '../lib/theme';
+import { supabase } from '../lib/supabase';
 import {
   getLevelFromXp,
   getLevelTitle,
   ACHIEVEMENTS,
   GamificationStats,
-} from '../../lib/gamification';
+} from '../lib/gamification';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const CARD_PADDING = 24;
@@ -208,7 +208,6 @@ export default function PerfilScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
       }
     >
-      {/* Identity Card */}
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.identityCenter}>
           <LinearGradient
@@ -262,7 +261,6 @@ export default function PerfilScreen() {
         </View>
       </View>
 
-      {/* Level Badge */}
       <LinearGradient
         colors={['#2563EB', '#1D4ED8']}
         start={{ x: 0, y: 0 }}
@@ -276,7 +274,6 @@ export default function PerfilScreen() {
         </View>
       </LinearGradient>
 
-      {/* Stats Grid */}
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeaderRow}>
           <Ionicons name="trending-up" size={16} color="#10B981" />
@@ -297,7 +294,6 @@ export default function PerfilScreen() {
         </View>
       </View>
 
-      {/* Competencies */}
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeaderRow}>
           <Ionicons name="bar-chart" size={16} color="#7C3AED" />
@@ -345,7 +341,6 @@ export default function PerfilScreen() {
         )}
       </View>
 
-      {/* Achievements */}
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.achieveHeader}>
           <View style={styles.sectionHeaderRow}>
@@ -380,7 +375,6 @@ export default function PerfilScreen() {
         </View>
       </View>
 
-      {/* Strengths & Weaknesses */}
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeaderRow}>
           <Ionicons name="pulse" size={16} color="#2563EB" />
@@ -396,7 +390,6 @@ export default function PerfilScreen() {
           </View>
         ) : (
           <View style={styles.swContainer}>
-            {/* Strengths */}
             <View style={styles.swColumn}>
               <View style={styles.swHeader}>
                 <Ionicons name="trending-up" size={12} color="#10B981" />
@@ -429,7 +422,6 @@ export default function PerfilScreen() {
               )}
             </View>
 
-            {/* Weaknesses */}
             <View style={styles.swColumn}>
               <View style={styles.swHeader}>
                 <Ionicons name="trending-down" size={12} color="#EF4444" />
@@ -485,8 +477,6 @@ const styles = StyleSheet.create({
     padding: CARD_PADDING,
     marginBottom: Spacing.lg,
   },
-
-  // Identity Card
   identityCenter: {
     alignItems: 'center',
   },
@@ -556,8 +546,6 @@ const styles = StyleSheet.create({
   xpProgressLabel: {
     fontSize: 9,
   },
-
-  // Level Badge
   levelBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -581,8 +569,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 1,
   },
-
-  // Section Header
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -597,8 +583,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     marginTop: 1,
   },
-
-  // Stats Grid
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -628,8 +612,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     textAlign: 'center',
   },
-
-  // Competencies
   compList: {
     gap: Spacing.md,
   },
@@ -682,8 +664,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     lineHeight: 16,
   },
-
-  // Achievements
   achieveHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -723,8 +703,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-
-  // Strengths & Weaknesses
   swContainer: {
     gap: Spacing.lg,
   },

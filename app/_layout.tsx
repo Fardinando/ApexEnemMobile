@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
-import { useColorScheme, View, ActivityIndicator } from 'react-native';
+import { useColorScheme, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../lib/supabase';
-import { Colors, getColors } from '../lib/theme';
+import { getColors } from '../lib/theme';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -45,6 +45,8 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="perfil" />
+        <Stack.Screen name="configuracoes" />
       </Stack>
     </View>
   );
