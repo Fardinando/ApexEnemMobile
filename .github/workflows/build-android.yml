@@ -24,28 +24,35 @@ jobs:
       - name: Setup Expo CLI
         run: npm install -g eas-cli
 
-      - name: Build APK (EAS Build)
+      - name: Initialize EAS project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas init --non-interactive
+
+      - name: Build APK
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile preview --non-interactive --json
+
+      - name: Get APK URL
+        id: apk
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          eas build \
-            --platform android \
-            --profile preview \
-            --non-interactive \
-            --json
+          BUILD_JSON=$(eas build:list --platform android --limit 1 --json)
+          BUILD_ID=$(echo "$BUILD_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)[0]['id'])")
+          APK_URL=$(echo "$BUILD_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)[0].get('artifacts',{}).get('buildUrl',''))")
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+          echo "apk_url=$APK_URL" >> $GITHUB_OUTPUT
 
       - name: Download APK
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          BUILD_ID=$(eas build:list --platform android --limit 1 --json | jq -r '.[0].id')
-          eas build:download --id "$BUILD_ID" --path ./apk-output
-        if: success()
+          mkdir -p apk-output
+          curl -L -o apk-output/ApexEnem.apk "${{ steps.apk.outputs.apk_url }}"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
-        if: success()
         with:
           name: apexenem-android
-          path: ./apk-output/*.apk
+          path: apk-output/ApexEnem.apk
           retention-days: 30
