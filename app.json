@@ -7,22 +7,17 @@
     "icon": "./assets/icon.png",
     "scheme": "apexenem",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "backgroundColor": "#1b1b24",
-      "resizeMode": "contain"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.apexenem.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#1b1b24",
-        "foregroundImage": "./assets/adaptive-icon.png"
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#1b1b24"
       },
       "package": "com.apexenem.app",
-      "versionCode": 1,
-      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"]
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -39,7 +34,8 @@
           "photosPermission": "Permitir acesso às fotos para enviar redações",
           "cameraPermission": "Permitir acesso à câmera para fotografar redações"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
